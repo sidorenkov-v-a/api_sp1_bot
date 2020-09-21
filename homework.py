@@ -8,9 +8,11 @@ import telegram
 from dotenv import load_dotenv
 
 log_time = datetime.today()
+
 logging.basicConfig(
     filename=f'app-{log_time}.log', filemode='w',
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
 
 load_dotenv()
@@ -19,23 +21,48 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-PRACTICUM_API_URL = \
+PRACTICUM_API_URL = (
     'https://praktikum.yandex.ru/api/user_api/homework_statuses/'
+)
 
 proxy = telegram.utils.request.Request(
     proxy_url='socks5://185.151.243.37:1080')
 bot = telegram.Bot(token=TELEGRAM_TOKEN, request=proxy)
 
 
+def is_response_valid(response):
+    check_fields = ['homework_name', 'status']
+    error_fields = []
+    for field in check_fields:
+        if response.get(field) is None:
+            error_fields.append(field)
+
+    if error_fields:
+        raise ValueError(
+            f'Response = \n{response}\n'
+            f'has no field(s): \n{error_fields}'
+        )
+
+    return True
+
+
 def parse_homework_status(homework):
-    homework_name = homework.get('homework_name')
-    status = homework.get('status')
-    if status == 'rejected':
-        verdict = 'К сожалению в работе нашлись ошибки.'
-    else:
-        verdict = 'Ревьюеру всё понравилось, ' \
-                  'можно приступать к следующему уроку.'
-    return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
+    if is_response_valid(homework):
+        homework_name = homework.get('homework_name')
+        status = homework.get('status')
+        if status == 'rejected':
+            verdict = 'К сожалению в работе нашлись ошибки.'
+        elif status == 'approved':
+            verdict = (
+                'Ревьюеру всё понравилось, '
+                'можно приступать к следующему уроку.'
+            )
+        else:
+            raise ValueError(
+                f'Resposne status field has unexpected value = {status}'
+            )
+
+        return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
 
 
 def get_homework_statuses(current_timestamp):
@@ -43,11 +70,8 @@ def get_homework_statuses(current_timestamp):
         raise TypeError('Current time should be int')
 
     current_time = int(time.time())
-    if current_timestamp < 0 or current_timestamp > current_time:
-        raise ValueError(
-            f'current_timestamp should be grater than 0 '
-            f'and lower than current time = {current_time}'
-        )
+    if current_time < current_timestamp < 0:
+        current_timestamp = current_time
 
     headers = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
     params = {'from_date': current_timestamp}
@@ -58,7 +82,11 @@ def get_homework_statuses(current_timestamp):
             params=params,
             headers=headers)
     except requests.exceptions.RequestException as e:
-        logging.exception(e)
+        info = (
+            f'Response heades: \n {headers} \n '
+            f'Response params: \n {params} \n'
+        )
+        logging.exception(f'{info} \n {e}')
         return dict()
 
     return response.json()
@@ -75,11 +103,12 @@ def main():
             new_homework = get_homework_statuses(current_timestamp)
 
             if new_homework.get('homeworks'):
-                send_message(
-                    parse_homework_status(new_homework.get('homeworks')[0]))
-            current_timestamp = new_homework.get(
-                'current_date')  # обновить timestamp
-            time.sleep(300)  # опрашивать раз в пять минут
+                homework = new_homework.get('homeworks')[0]
+                message = parse_homework_status(homework)
+                send_message(message)
+
+            current_timestamp = new_homework.get('current_date')
+            time.sleep(300)
 
         except Exception as e:
             logging.exception(f'Бот упал с ошибкой: {e}')
