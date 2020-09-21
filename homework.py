@@ -50,19 +50,20 @@ def parse_homework_status(homework):
     if is_response_valid(homework):
         homework_name = homework.get('homework_name')
         status = homework.get('status')
-        if status == 'rejected':
-            verdict = 'К сожалению в работе нашлись ошибки.'
-        elif status == 'approved':
-            verdict = (
+        status_verdict = {
+            'rejected': 'К сожалению в работе нашлись ошибки.',
+            'approved': (
                 'Ревьюеру всё понравилось, '
                 'можно приступать к следующему уроку.'
             )
+        }
+        verdict = status_verdict.get(status)
+        if verdict:
+            return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
         else:
             raise ValueError(
                 f'Resposne status field has unexpected value = {status}'
             )
-
-        return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
 
 
 def get_homework_statuses(current_timestamp):
