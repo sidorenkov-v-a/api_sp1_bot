@@ -36,8 +36,8 @@ bot = telegram.Bot(token=TELEGRAM_TOKEN, request=proxy)
 RESPONSE_FIELDS = ('homework_name', 'status')
 
 STATUS_VERDICTS = {
-    'rejected1': 'К сожалению в работе нашлись ошибки.',
-    'approved1': (
+    'rejected': 'К сожалению в работе нашлись ошибки.',
+    'approved': (
         'Ревьюеру всё понравилось, '
         'можно приступать к следующему уроку.'
     )
@@ -64,6 +64,7 @@ def is_response_valid(response):
 
 def parse_homework_status(homework):
     result = is_response_valid(homework)
+
     if result is True:
         homework_name = homework['homework_name']
         status = homework['status']
@@ -119,35 +120,18 @@ def send_message(message):
 
 
 def main():
-    # current_timestamp = int(time.time())  # начальное значение timestamp
-    # while True:
-    #     try:
-    #         new_homework = get_homework_statuses(current_timestamp)
-    #
-    #         if new_homework.get('homeworks'):
-    #             homework = new_homework.get('homeworks')[0]
-    #             message = parse_homework_status(homework)
-    #             send_message(message)
-    #
-    #         current_timestamp = new_homework.get('current_date')
-    #         time.sleep(300)
-    #
-    #     except Exception as e:
-    #         logging.exception(f'Бот упал с ошибкой: {e}')
-    #         time.sleep(5)
-    #         continue
-
     current_timestamp = int(time.time())  # начальное значение timestamp
     while True:
         try:
-            new_homework = get_homework_statuses(0)
+            new_homework = get_homework_statuses(current_timestamp)
 
             if new_homework.get('homeworks'):
                 homework = new_homework.get('homeworks')[0]
-                message = parse_homework_status(homework) + "\nHello from HEROKU"
+                message = parse_homework_status(homework)
                 send_message(message)
 
-            time.sleep(10)
+            current_timestamp = new_homework.get('current_date')
+            time.sleep(300)
 
         except Exception as e:
             logging.exception(f'Бот упал с ошибкой: {e}')
